@@ -11,7 +11,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   ) {
     guard let windowScene = (scene as? UIWindowScene) else { return }
 
-    let flutterViewController = FlutterViewController()
+    // 使用已初始化的 Flutter 引擎
+    let flutterViewController = FlutterViewController(engine: FlutterEngineProvider.shared.engine, nibName: nil, bundle: nil)
     window = UIWindow(windowScene: windowScene)
     window?.rootViewController = flutterViewController
     window?.makeKeyAndVisible()
