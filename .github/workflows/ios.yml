@@ -3,14 +3,11 @@ name: Build iOS
 on:
   push:
     branches: [main, master]
-    tags:
-      - 'v*'
-  pull_request:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-14
 
     steps:
       - name: Checkout code
@@ -19,7 +16,6 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.5'
           channel: 'stable'
           cache: true
 
@@ -30,18 +26,14 @@ jobs:
         run: |
           flutter build ios --release --no-codesign
 
+      - name: Compress iOS build
+        run: |
+          cd build/ios/iphoneos
+          zip -r Runner.zip Runner.app
+
       - name: Upload iOS build
         uses: actions/upload-artifact@v4
         with:
           name: ios-build
-          path: build/ios/iphoneos/Runner.app
+          path: build/ios/iphoneos/Runner.zip
           retention-days: 30
-
-      # 如果有 TestFlight 配置，可以添加以下步骤
-      # - name: Upload to TestFlight
-      #   uses: apple-actions/upload-testflight-build@v1
-      #   with:
-      #     app-path: build/ios/iphoneos/Runner.app
-      #     issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
-      #     api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
-      #     api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
