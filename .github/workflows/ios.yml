@@ -17,22 +17,51 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: '3.24.5'
           cache: false
 
-      - name: Install dependencies
-        run: flutter pub get
+      - name: Verify Flutter installation
+        run: |
+          flutter --version
+          flutter doctor -v
+
+      - name: Install CocoaPods
+        run: |
+          gem install cocoapods
+          pod --version
+
+      - name: Install iOS dependencies
+        run: |
+          cd ios
+          pod install
+          cd ..
+
+      - name: Install Flutter dependencies
+        run: |
+          flutter pub get
+          flutter pub deps
 
       - name: Build iOS (no codesign)
-        run: flutter build ios --release --no-codesign
+        run: |
+          flutter build ios --release --no-codesign --verbose
+        env:
+          FLUTTER_BUILD_NAME: "1.0.0"
+          FLUTTER_BUILD_NUMBER: "1"
+
+      - name: Verify build output
+        run: |
+          ls -la build/ios/iphoneos/
+          test -d build/ios/iphoneos/Runner.app && echo "Runner.app exists" || exit 1
 
       - name: Pack iOS build
         run: |
-            cd build/ios/iphoneos
-            zip -r Runner.zip Runner.app
+          cd build/ios/iphoneos
+          zip -r Runner.zip Runner.app
 
       - name: Upload iOS build
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ios-build
           path: build/ios/iphoneos/Runner.zip
           retention-days: 30
+          compression-level: 9
