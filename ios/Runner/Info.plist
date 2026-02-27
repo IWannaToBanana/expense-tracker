@@ -38,11 +38,9 @@
 					<key>UISceneClassName</key>
 					<string>UIWindowScene</string>
 					<key>UISceneConfigurationName</key>
-					<string>flutter</string>
+					<string>Default</string>
 					<key>UISceneDelegateClassName</key>
 					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
-					<key>UISceneStoryboardFile</key>
-					<string>Main</string>
 				</dict>
 			</array>
 		</dict>
@@ -66,5 +64,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>需要使用相机来拍摄收据和小票</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>需要访问相册来选择收据图片进行金额识别</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>需要保存收据图片到相册</string>
 </dict>
 </plist>
