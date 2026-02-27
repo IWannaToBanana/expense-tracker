@@ -15,6 +15,9 @@ import 'theme/app_theme.dart';
 // 全局导航 key，用于从快捷指令服务中导航
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+// URL Scheme 处理
+const String _scheme = 'expense-tracker';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -101,8 +104,22 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       onGenerateRoute: (settings) {
-        switch (settings.name) {
+        // 解析 URL 路径（去掉 scheme）
+        String path = settings.name ?? '/';
+        if (path.startsWith('expense-tracker://')) {
+          path = path.replaceFirst('expense-tracker://', '/');
+        } else if (path.contains('://')) {
+          // 处理其他可能的 URL schemes
+          final schemeEnd = path.indexOf('://');
+          path = path.substring(schemeEnd + 3);
+          if (!path.startsWith('/')) {
+            path = '/$path';
+          }
+        }
+
+        switch (path) {
           case '/add_transaction':
+          case '/add':
             // 支持两种参数类型：Transaction（编辑）或 double（OCR识别金额）
             if (settings.arguments is Transaction) {
               return MaterialPageRoute(
