@@ -114,35 +114,6 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
       }
     }
   }
-  void _autoRecognizeLatestScreenshot() async {
-    try {
-      final ImagePicker picker = ImagePicker();
-      final OCRService ocrService = OCRService();
-
-      // 打开相册选择图片
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-      );
-
-      if (image != null && mounted) {
-        _showSnackBar('正在识别金额...');
-
-        final amount = await ocrService.recognizeAmount(image.path);
-
-        if (amount != null && mounted) {
-          // 显示确认弹窗
-          _showQuickAddDialog(amount);
-        } else if (mounted) {
-          _showSnackBar('未能识别金额', isError: true);
-        }
-      }
-
-      ocrService.dispose();
-    } catch (e) {
-      debugPrint('自动识别失败: $e');
-    }
-  }
 
   /// 显示快速记账弹窗
   void _showQuickAddDialog(double amount) {
@@ -341,15 +312,27 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
             // 触发快速记账流程（延迟执行，等待页面加载完成）
             WidgetsBinding.instance.addPostFrameCallback((_) {
               Future.delayed(const Duration(milliseconds: 300), () {
+                // 检查是否有amount参数（快捷指令OCR识别的金额）
+                final amountStr = uri?.queryParameters['amount'];
+                if (amountStr != null) {
+                  final amount = double.tryParse(amountStr);
+                  if (amount != null && amount > 0) {
+                    _showQuickAddDialog(amount);
+                    return;
+                  }
+                }
+
                 // 如果有图片路径参数，直接OCR
                 if (uri?.queryParameters.isNotEmpty == true) {
                   final imagePath = uri?.queryParameters.values.first;
-                  if (imagePath != null) {
+                  if (imagePath != null && !imagePath.contains('.')) {
                     _recognizeAndShowDialog(imagePath);
+                    return;
                   }
-                } else {
-                  _autoRecognizeLatestScreenshot();
                 }
+
+                // 否则弹出相册选择
+                _autoRecognizeLatestScreenshot();
               });
             });
             // 返回首页作为背景
