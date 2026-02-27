@@ -1,0 +1,51 @@
+name: expense_tracker
+description: A simple expense tracker app with OCR support.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.6.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 状态管理
+  flutter_riverpod: ^2.5.0
+
+  # 本地存储 - Hive (轻量、稳定、仍在维护)
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.2
+
+  # 图表
+  fl_chart: ^0.68.0
+
+  # OCR识别 - 使用google_mlkit_text_recognition_v2
+  google_mlkit_text_recognition: ^0.12.0
+
+  # 图片处理和相机
+  image_picker: ^1.0.7
+  camera: ^0.10.5+5
+
+  # 日期时间
+  intl: ^0.19.0
+
+  # iOS快捷指令 - 接收分享的图片
+  receive_sharing_intent: ^1.5.0
+
+  # 图标
+  cupertino_icons: ^1.0.8
+
+  # iCloud同步 (iOS) - 可选，后期添加
+  # ios_icloud_storage: ^2.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.8
+
+flutter:
+  uses-material-design: true
