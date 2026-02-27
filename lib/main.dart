@@ -1,9 +1,11 @@
 import 'dart:io' show Platform;
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'models/transaction.dart';
 import 'models/category.dart';
@@ -59,6 +61,59 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
   }
 
   /// 自动识别最新截图并显示确认弹窗
+  void _autoRecognizeLatestScreenshot() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final OCRService ocrService = OCRService();
+
+      // 打开相册选择图片
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (image != null && mounted) {
+        _showSnackBar('正在识别金额...');
+
+        final amount = await ocrService.recognizeAmount(image.path);
+
+        if (amount != null && mounted) {
+          // 显示确认弹窗
+          _showQuickAddDialog(amount);
+        } else if (mounted) {
+          _showSnackBar('未能识别金额', isError: true);
+        }
+      }
+
+      ocrService.dispose();
+    } catch (e) {
+      debugPrint('自动识别失败: $e');
+    }
+  }
+
+  /// 识别指定路径的图片并显示确认弹窗
+  void _recognizeAndShowDialog(String imagePath) async {
+    try {
+      final OCRService ocrService = OCRService();
+
+      _showSnackBar('正在识别金额...');
+
+      final amount = await ocrService.recognizeAmount(imagePath);
+
+      if (amount != null && mounted) {
+        _showQuickAddDialog(amount);
+      } else if (mounted) {
+        _showSnackBar('未能识别金额', isError: true);
+      }
+
+      ocrService.dispose();
+    } catch (e) {
+      debugPrint('OCR识别失败: $e');
+      if (mounted) {
+        _showSnackBar('识别失败: $e', isError: true);
+      }
+    }
+  }
   void _autoRecognizeLatestScreenshot() async {
     try {
       final ImagePicker picker = ImagePicker();
@@ -274,16 +329,45 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
           }
         }
 
+        // 解析查询参数（图片路径）
+        Uri? uri;
+        if (settings.name != null && settings.name!.contains('?')) {
+          uri = Uri.parse(settings.name!);
+        }
+
         switch (path) {
           case '/add_transaction':
           case '/add':
             // 触发快速记账流程（延迟执行，等待页面加载完成）
             WidgetsBinding.instance.addPostFrameCallback((_) {
               Future.delayed(const Duration(milliseconds: 300), () {
-                _autoRecognizeLatestScreenshot();
+                // 如果有图片路径参数，直接OCR
+                if (uri?.queryParameters.isNotEmpty == true) {
+                  final imagePath = uri?.queryParameters.values.first;
+                  if (imagePath != null) {
+                    _recognizeAndShowDialog(imagePath);
+                  }
+                } else {
+                  _autoRecognizeLatestScreenshot();
+                }
               });
             });
             // 返回首页作为背景
+            return MaterialPageRoute(
+              builder: (context) => const HomePage(),
+            );
+          case '/ocr':
+            // 通过URL传递图片路径的OCR请求
+            if (uri?.queryParameters.isNotEmpty == true) {
+              final imagePath = uri?.queryParameters.values.first;
+              if (imagePath != null) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  Future.delayed(const Duration(milliseconds: 300), () {
+                    _recognizeAndShowDialog(imagePath);
+                  });
+                });
+              }
+            }
             return MaterialPageRoute(
               builder: (context) => const HomePage(),
             );
