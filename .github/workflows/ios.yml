@@ -20,26 +20,21 @@ jobs:
           flutter-version: '3.24.5'
           cache: false
 
-      - name: Verify Flutter installation
+      - name: Install Flutter dependencies FIRST
         run: |
-          flutter --version
-          flutter doctor -v
+          flutter pub get
+          flutter pub deps
 
       - name: Install CocoaPods
         run: |
           gem install cocoapods
           pod --version
 
-      - name: Install iOS dependencies
+      - name: Install iOS dependencies (pod install)
         run: |
           cd ios
           pod install
           cd ..
-
-      - name: Install Flutter dependencies
-        run: |
-          flutter pub get
-          flutter pub deps
 
       - name: Build iOS (no codesign)
         run: |
