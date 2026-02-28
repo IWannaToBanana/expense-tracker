@@ -378,7 +378,7 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
               // 这是一个带有参数的 Deep Link 调用（比如从快捷指令传来金额）
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 Future.delayed(const Duration(milliseconds: 300), () {
-                  _handleIncomingUri(uri);
+                  _handleIncomingUri(uri!);
                 });
               });
               // 返回首页作为底色背景，并在延时后弹窗
@@ -396,7 +396,7 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               Future.delayed(const Duration(milliseconds: 300), () {
                 if (uri != null) {
-                   _handleIncomingUri(uri);
+                   _handleIncomingUri(uri!);
                 }
               });
             });
