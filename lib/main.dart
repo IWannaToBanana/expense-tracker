@@ -96,31 +96,32 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
 
   /// 处理接收到的 URL (处理冷启动或热启动传来的 URL)
   void _handleIncomingUri(Uri uri) {
+    // 1. 如果有 amount 参数，无论路径如何，都直接静默记账
+    final amountStr = uri.queryParameters['amount'];
+    if (amountStr != null) {
+      final amount = double.tryParse(amountStr);
+      if (amount != null && amount > 0) {
+        // 全自动静默记账，默认存入餐饮
+        final defaultCategory = Category.expenseCategories.first;
+        _saveQuickTransaction(amount, defaultCategory);
+        return;
+      }
+    }
+
+    // 2. 只有带图片的情况走原先的路径处理逻辑
     String path = uri.path;
-    // 有些时候 scheme 会带有 host 而 path 为空，如 `expense-tracker://add`
     if (path.isEmpty && uri.host.isNotEmpty) {
       path = '/${uri.host}';
     }
 
-    if (path == '/add_transaction' || path == '/add') {
-      final amountStr = uri.queryParameters['amount'];
-      if (amountStr != null) {
-        final amount = double.tryParse(amountStr);
-        if (amount != null && amount > 0) {
-          _showQuickAddDialog(amount);
-        }
-      } else if (uri.queryParameters.isNotEmpty) {
+    if (path == '/add_transaction' || path == '/add' || path == '/ocr') {
+      if (uri.queryParameters.isNotEmpty) {
          final imagePath = uri.queryParameters.values.first;
          if (!imagePath.contains('.')) {
            _recognizeAndShowDialog(imagePath);
          }
       } else {
          _autoRecognizeLatestScreenshot();
-      }
-    } else if (path == '/ocr') {
-      if (uri.queryParameters.isNotEmpty) {
-         final imagePath = uri.queryParameters.values.first;
-         _recognizeAndShowDialog(imagePath);
       }
     }
   }
