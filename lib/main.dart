@@ -58,7 +58,6 @@ class ExpenseTrackerApp extends ConsumerStatefulWidget {
 
 class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with WidgetsBindingObserver {
   StreamSubscription? _sub;
-  static const platform = MethodChannel('com.example.expenseTracker/deeplink');
 
   // 防止重复处理同一个 URI
   final Set<String> _processedUris = {};
@@ -70,33 +69,8 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
     // iOS 平台初始化快捷指令
     _initializeShortcutsIfNeeded();
 
-    // 监听运行时的 Deep Link (如快捷指令的 callback URL)
-    _initDeepLinkListener();
-
-    // 监听 iOS 原生自己建桥发来的兜底 Deep Link
-    platform.setMethodCallHandler((call) async {
-      try {
-        if (call.method == 'onDeepLink') {
-          final urlString = call.arguments as String?;
-          if (urlString != null) {
-            debugPrint('🔗 Native Channel: Received $urlString');
-            _showDebugDialog('Native Channel', 'Received: $urlString');
-            _handleIncomingUriSafely(urlString);
-          }
-        }
-      } catch (e, stackTrace) {
-        final errorMsg = '❌ MethodChannel handler error: $e\n\nStackTrace: $stackTrace';
-        debugPrint(errorMsg);
-        _showDebugDialog('MethodChannel Error', errorMsg);
-      }
-    });
-
-    // 捕获 Flutter 框架错误
-    FlutterError.onError = (details) {
-      final errorMsg = 'Flutter Error:\n${details.exception}\n\n${details.stack}';
-      debugPrint(errorMsg);
-      _showDebugDialog('Flutter Error', errorMsg);
-    };
+    // 暂时禁用所有 Deep Link 监听
+    // _initDeepLinkListener();
   }
 
   @override
