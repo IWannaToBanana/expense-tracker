@@ -75,6 +75,15 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
   }
 
   void _initDeepLinkListener() {
+    // 处理冷启动时的初始链接
+    getInitialUri().then((uri) {
+      if (uri != null) {
+        _handleIncomingUri(uri);
+      }
+    }).catchError((err) {
+      debugPrint('Failed to get initial uri: $err');
+    });
+
     // 监听应用在后台时的链接
     _sub = uriLinkStream.listen((Uri? uri) {
       if (uri != null) {
@@ -87,32 +96,31 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
 
   /// 处理接收到的 URL (处理冷启动或热启动传来的 URL)
   void _handleIncomingUri(Uri uri) {
-    if (uri.scheme == 'expense-tracker') {
-      String path = uri.path;
-      if (path.isEmpty && uri.host.isNotEmpty) {
-        path = '/${uri.host}';
-      }
+    String path = uri.path;
+    // 有些时候 scheme 会带有 host 而 path 为空，如 `expense-tracker://add`
+    if (path.isEmpty && uri.host.isNotEmpty) {
+      path = '/${uri.host}';
+    }
 
-      if (path == '/add_transaction' || path == '/add') {
-        final amountStr = uri.queryParameters['amount'];
-        if (amountStr != null) {
-          final amount = double.tryParse(amountStr);
-          if (amount != null && amount > 0) {
-            _showQuickAddDialog(amount);
-          }
-        } else if (uri.queryParameters.isNotEmpty) {
-           final imagePath = uri.queryParameters.values.first;
-           if (!imagePath.contains('.')) {
-             _recognizeAndShowDialog(imagePath);
-           }
-        } else {
-           _autoRecognizeLatestScreenshot();
+    if (path == '/add_transaction' || path == '/add') {
+      final amountStr = uri.queryParameters['amount'];
+      if (amountStr != null) {
+        final amount = double.tryParse(amountStr);
+        if (amount != null && amount > 0) {
+          _showQuickAddDialog(amount);
         }
-      } else if (path == '/ocr') {
-        if (uri.queryParameters.isNotEmpty) {
-           final imagePath = uri.queryParameters.values.first;
+      } else if (uri.queryParameters.isNotEmpty) {
+         final imagePath = uri.queryParameters.values.first;
+         if (!imagePath.contains('.')) {
            _recognizeAndShowDialog(imagePath);
-        }
+         }
+      } else {
+         _autoRecognizeLatestScreenshot();
+      }
+    } else if (path == '/ocr') {
+      if (uri.queryParameters.isNotEmpty) {
+         final imagePath = uri.queryParameters.values.first;
+         _recognizeAndShowDialog(imagePath);
       }
     }
   }
