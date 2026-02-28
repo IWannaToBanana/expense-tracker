@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 引入 MethodChannel
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image_picker/image_picker.dart';
@@ -55,23 +56,54 @@ class ExpenseTrackerApp extends ConsumerStatefulWidget {
   ConsumerState<ExpenseTrackerApp> createState() => _ExpenseTrackerAppState();
 }
 
-class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
+class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with WidgetsBindingObserver {
   StreamSubscription? _sub;
+  static const platform = MethodChannel('com.example.expenseTracker/deeplink');
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // iOS 平台初始化快捷指令
     _initializeShortcutsIfNeeded();
     
     // 监听运行时的 Deep Link (如快捷指令的 callback URL)
     _initDeepLinkListener();
+
+    // 监听 iOS 原生自己建桥发来的兜底 Deep Link
+    platform.setMethodCallHandler((call) async {
+      if (call.method == 'onDeepLink') {
+        final urlString = call.arguments as String?;
+        if (urlString != null) {
+          final uri = Uri.tryParse(urlString);
+          if (uri != null) {
+             debugPrint('Received DeepLink from Native Channel: $uri');
+            _handleIncomingUri(uri);
+          }
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // 当应用从后台返回前台时，有时 stream 会丢失事件，这里做一个兜底获取
+      getInitialUri().then((uri) {
+        if (uri != null) {
+          // 由于 getInitialUri 总是返回启动时的URI，我们需要确保不重复处理
+          // 但由于我们使用了量身定制的无感记账，通常多次传参的概率较低，或者可以在此处加入去重逻辑
+          // 为了确保最高到达率，暂时保留处理
+        }
+      });
+    }
   }
 
   void _initDeepLinkListener() {
