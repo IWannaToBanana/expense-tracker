@@ -6,16 +6,26 @@ class AppDelegate: FlutterAppDelegate {
   private var methodChannel: FlutterMethodChannel?
 
   private var initialDeepLink: String?
+  private var setupRetryCount = 0
+  private let maxRetryCount = 50  // 最多重试 50 次（5秒）
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    GeneratedPluginRegistrant.register(with: self)
+    print("🟢 AppDelegate: didFinishLaunchingWithOptions START")
+
+    // 必须先调用 super 初始化 Flutter 引擎
     let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    print("🟢 AppDelegate: super.application() completed")
+
+    // 然后注册插件
+    GeneratedPluginRegistrant.register(with: self)
+    print("🟢 AppDelegate: GeneratedPluginRegistrant.register() completed")
 
     // 延迟初始化 MethodChannel，确保 Flutter 引擎完全就绪
     DispatchQueue.main.async { [weak self] in
+      print("🟢 AppDelegate: Starting MethodChannel setup...")
       self?.setupMethodChannel()
     }
 
@@ -23,8 +33,19 @@ class AppDelegate: FlutterAppDelegate {
   }
 
   private func setupMethodChannel() {
+    print("🔧 AppDelegate: setupMethodChannel called, retry count: \(setupRetryCount)")
+
+    // 防止无限重试
+    guard setupRetryCount < maxRetryCount else {
+      print("❌ AppDelegate: Max retry count reached, giving up")
+      return
+    }
+
+    setupRetryCount += 1
+
     guard let controller = window?.rootViewController as? FlutterViewController else {
-      print("⚠️ AppDelegate: FlutterViewController not ready, will retry...")
+      print("⚠️ AppDelegate: FlutterViewController not ready (window: \(String(describing: window)), rootViewController: \(String(describing: window?.rootViewController)))")
+
       // 如果 FlutterViewController 还没准备好，稍后重试
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
         self?.setupMethodChannel()
@@ -32,15 +53,19 @@ class AppDelegate: FlutterAppDelegate {
       return
     }
 
+    print("✅ AppDelegate: FlutterViewController found, creating MethodChannel...")
+
     methodChannel = FlutterMethodChannel(name: "com.example.expenseTracker/deeplink",
                                          binaryMessenger: controller.binaryMessenger)
 
     methodChannel?.setMethodCallHandler({ [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
+      print("📨 Native: Method call received: \(call.method)")
       if call.method == "getInitialUri" {
         print("✅ Native: getInitialUri called, returning: \(self?.initialDeepLink ?? "nil")")
         result(self?.initialDeepLink)
         self?.initialDeepLink = nil // 取出后清空
       } else {
+        print("⚠️ Native: Unknown method: \(call.method)")
         result(FlutterMethodNotImplemented)
       }
     })
