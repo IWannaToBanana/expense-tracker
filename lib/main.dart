@@ -374,18 +374,23 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
         switch (path) {
           case '/add_transaction':
           case '/add':
-            // 触发快速记账流程（延迟执行，等待页面加载完成）
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              Future.delayed(const Duration(milliseconds: 300), () {
-                 if (uri != null) {
-                    _handleIncomingUri(uri);
-                 }
+            if (uri != null && uri.queryParameters.isNotEmpty) {
+              // 这是一个带有参数的 Deep Link 调用（比如从快捷指令传来金额）
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                Future.delayed(const Duration(milliseconds: 300), () {
+                  _handleIncomingUri(uri);
+                });
               });
-            });
-            // 返回首页作为背景
-            return MaterialPageRoute(
-              builder: (context) => const HomePage(),
-            );
+              // 返回首页作为底色背景，并在延时后弹窗
+              return MaterialPageRoute(
+                builder: (context) => const HomePage(),
+              );
+            } else {
+              // 普通的应用内部路由跳转（用户点击了加号）
+              return MaterialPageRoute(
+                builder: (context) => const AddTransactionPage(),
+              );
+            }
           case '/ocr':
             // 通过URL传递图片路径的OCR请求
             WidgetsBinding.instance.addPostFrameCallback((_) {
