@@ -5,16 +5,30 @@ import UIKit
 class AppDelegate: FlutterAppDelegate {
   private var methodChannel: FlutterMethodChannel?
 
+  private var initialDeepLink: String?
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    let controller : FlutterViewController = window?.rootViewController as! FlutterViewController
-    methodChannel = FlutterMethodChannel(name: "com.example.expenseTracker/deeplink",
-                                         binaryMessenger: controller.binaryMessenger)
-    
     GeneratedPluginRegistrant.register(with: self)
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    
+    if let controller = window?.rootViewController as? FlutterViewController {
+      methodChannel = FlutterMethodChannel(name: "com.example.expenseTracker/deeplink",
+                                           binaryMessenger: controller.binaryMessenger)
+      
+      methodChannel?.setMethodCallHandler({ [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
+        if call.method == "getInitialUri" {
+          result(self?.initialDeepLink)
+          self?.initialDeepLink = nil // 取出后清空
+        } else {
+          result(FlutterMethodNotImplemented)
+        }
+      })
+    }
+    
+    return result
   }
   
   // 重写该方法以手动接管自定义 URL scheme 的唤醒 (Deep Link) 
@@ -24,7 +38,15 @@ class AppDelegate: FlutterAppDelegate {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey : Any] = [:]
   ) -> Bool {
-    methodChannel?.invokeMethod("onDeepLink", arguments: url.absoluteString)
+    let urlString = url.absoluteString
+    if methodChannel == nil {
+      // Flutter引擎还未初始化完毕（冷启动期间），先存起来
+      initialDeepLink = urlString
+    } else {
+      // 已经在后台运行了（热启动），直接发去 Flutter
+      methodChannel?.invokeMethod("onDeepLink", arguments: urlString)
+    }
+    
     return super.application(app, open: url, options: options)
   }
 }

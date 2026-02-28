@@ -107,13 +107,25 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
   }
 
   void _initDeepLinkListener() {
-    // 处理冷启动时的初始链接
+    // 处理冷启动时的初始链接 - 读取使用 uni_links 获取的数据
     getInitialUri().then((uri) {
       if (uri != null) {
         _handleIncomingUri(uri);
       }
     }).catchError((err) {
       debugPrint('Failed to get initial uri: $err');
+    });
+
+    // 读取自己搭建的 MethodChannel 兜底缓存的冷启动数据 (主要针对 iOS 强杀启动)
+    platform.invokeMethod<String>('getInitialUri').then((urlString) {
+      if (urlString != null && urlString.isNotEmpty) {
+        final uri = Uri.tryParse(urlString);
+        if (uri != null) {
+          _handleIncomingUri(uri);
+        }
+      }
+    }).catchError((err) {
+      debugPrint('Failed to get native initial uri: $err');
     });
 
     // 监听应用在后台时的链接
