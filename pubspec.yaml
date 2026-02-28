@@ -33,6 +33,7 @@ dependencies:
 
   # iOS快捷指令 - 接收分享的图片
   receive_sharing_intent: ^1.5.0
+  uni_links: ^0.5.1
 
   # 图标
   cupertino_icons: ^1.0.8

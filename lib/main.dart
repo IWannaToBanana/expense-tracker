@@ -7,11 +7,10 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'package:uni_links/uni_links.dart';
+import 'dart:async';
+
 import 'models/transaction.dart';
-import 'models/category.dart';
-import 'providers/providers.dart';
-import 'services/storage_service.dart';
-import 'services/shortcut_service.dart';
 import 'services/ocr_service.dart';
 import 'views/home/home_page.dart';
 import 'views/transaction/add_transaction_page.dart';
@@ -53,11 +52,65 @@ class ExpenseTrackerApp extends ConsumerStatefulWidget {
 }
 
 class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
+  StreamSubscription? _sub;
+
   @override
   void initState() {
     super.initState();
     // iOS 平台初始化快捷指令
     _initializeShortcutsIfNeeded();
+    
+    // 监听运行时的 Deep Link (如快捷指令的 callback URL)
+    _initDeepLinkListener();
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  void _initDeepLinkListener() {
+    // 监听应用在后台时的链接
+    _sub = uriLinkStream.listen((Uri? uri) {
+      if (uri != null) {
+        _handleIncomingUri(uri);
+      }
+    }, onError: (err) {
+      debugPrint('Deep Link Error: $err');
+    });
+  }
+
+  /// 处理接收到的 URL (处理冷启动或热启动传来的 URL)
+  void _handleIncomingUri(Uri uri) {
+    if (uri.scheme == 'expense-tracker') {
+      String path = uri.path;
+      if (path.isEmpty && uri.host.isNotEmpty) {
+        path = '/${uri.host}';
+      }
+
+      if (path == '/add_transaction' || path == '/add') {
+        final amountStr = uri.queryParameters['amount'];
+        if (amountStr != null) {
+          final amount = double.tryParse(amountStr);
+          if (amount != null && amount > 0) {
+            _showQuickAddDialog(amount);
+          }
+        } else if (uri.queryParameters.isNotEmpty) {
+           final imagePath = uri.queryParameters.values.first;
+           if (!imagePath.contains('.')) {
+             _recognizeAndShowDialog(imagePath);
+           }
+        } else {
+           _autoRecognizeLatestScreenshot();
+        }
+      } else if (path == '/ocr') {
+        if (uri.queryParameters.isNotEmpty) {
+           final imagePath = uri.queryParameters.values.first;
+           _recognizeAndShowDialog(imagePath);
+        }
+      }
+    }
   }
 
   /// 自动识别最新截图并显示确认弹窗
@@ -312,27 +365,9 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
             // 触发快速记账流程（延迟执行，等待页面加载完成）
             WidgetsBinding.instance.addPostFrameCallback((_) {
               Future.delayed(const Duration(milliseconds: 300), () {
-                // 检查是否有amount参数（快捷指令OCR识别的金额）
-                final amountStr = uri?.queryParameters['amount'];
-                if (amountStr != null) {
-                  final amount = double.tryParse(amountStr);
-                  if (amount != null && amount > 0) {
-                    _showQuickAddDialog(amount);
-                    return;
-                  }
-                }
-
-                // 如果有图片路径参数，直接OCR
-                if (uri?.queryParameters.isNotEmpty == true) {
-                  final imagePath = uri?.queryParameters.values.first;
-                  if (imagePath != null && !imagePath.contains('.')) {
-                    _recognizeAndShowDialog(imagePath);
-                    return;
-                  }
-                }
-
-                // 否则弹出相册选择
-                _autoRecognizeLatestScreenshot();
+                 if (uri != null) {
+                    _handleIncomingUri(uri);
+                 }
               });
             });
             // 返回首页作为背景
@@ -341,16 +376,13 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> {
             );
           case '/ocr':
             // 通过URL传递图片路径的OCR请求
-            if (uri?.queryParameters.isNotEmpty == true) {
-              final imagePath = uri?.queryParameters.values.first;
-              if (imagePath != null) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  Future.delayed(const Duration(milliseconds: 300), () {
-                    _recognizeAndShowDialog(imagePath);
-                  });
-                });
-              }
-            }
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              Future.delayed(const Duration(milliseconds: 300), () {
+                if (uri != null) {
+                   _handleIncomingUri(uri);
+                }
+              });
+            });
             return MaterialPageRoute(
               builder: (context) => const HomePage(),
             );
