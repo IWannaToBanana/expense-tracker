@@ -60,27 +60,32 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
   StreamSubscription? _sub;
   static const platform = MethodChannel('com.example.expenseTracker/deeplink');
 
+  // 防止重复处理同一个 URI
+  final Set<String> _processedUris = {};
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     // iOS 平台初始化快捷指令
     _initializeShortcutsIfNeeded();
-    
+
     // 监听运行时的 Deep Link (如快捷指令的 callback URL)
     _initDeepLinkListener();
 
     // 监听 iOS 原生自己建桥发来的兜底 Deep Link
     platform.setMethodCallHandler((call) async {
-      if (call.method == 'onDeepLink') {
-        final urlString = call.arguments as String?;
-        if (urlString != null) {
-          final uri = Uri.tryParse(urlString);
-          if (uri != null) {
-             debugPrint('Received DeepLink from Native Channel: $uri');
-            _handleIncomingUri(uri);
+      try {
+        if (call.method == 'onDeepLink') {
+          final urlString = call.arguments as String?;
+          if (urlString != null) {
+            debugPrint('🔗 Native Channel: Received $urlString');
+            _handleIncomingUriSafely(urlString);
           }
         }
+      } catch (e, stackTrace) {
+        debugPrint('❌ MethodChannel handler error: $e');
+        debugPrint('StackTrace: $stackTrace');
       }
     });
   }
@@ -89,6 +94,7 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
+    _processedUris.clear();
     super.dispose();
   }
 
@@ -110,7 +116,7 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
     // 处理冷启动时的初始链接 - 读取使用 uni_links 获取的数据
     getInitialUri().then((uri) {
       if (uri != null) {
-        _handleIncomingUri(uri);
+        _handleIncomingUriSafely(uri.toString());
       }
     }).catchError((err) {
       debugPrint('Failed to get initial uri: $err');
@@ -119,10 +125,7 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
     // 读取自己搭建的 MethodChannel 兜底缓存的冷启动数据 (主要针对 iOS 强杀启动)
     platform.invokeMethod<String>('getInitialUri').then((urlString) {
       if (urlString != null && urlString.isNotEmpty) {
-        final uri = Uri.tryParse(urlString);
-        if (uri != null) {
-          _handleIncomingUri(uri);
-        }
+        _handleIncomingUriSafely(urlString);
       }
     }).catchError((err) {
       debugPrint('Failed to get native initial uri: $err');
@@ -131,11 +134,41 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
     // 监听应用在后台时的链接
     _sub = uriLinkStream.listen((Uri? uri) {
       if (uri != null) {
-        _handleIncomingUri(uri);
+        _handleIncomingUriSafely(uri.toString());
       }
     }, onError: (err) {
       debugPrint('Deep Link Error: $err');
     });
+  }
+
+  /// 安全地处理接收到的 URL（带去重和错误处理）
+  void _handleIncomingUriSafely(String uriString) {
+    try {
+      final uri = Uri.tryParse(uriString);
+      if (uri == null) {
+        debugPrint('⚠️ Invalid URI: $uriString');
+        return;
+      }
+
+      // 去重检查
+      final uriKey = uri.toString();
+      if (_processedUris.contains(uriKey)) {
+        debugPrint('⏭️ Skipping already processed URI: $uri');
+        return;
+      }
+
+      debugPrint('✅ Processing URI: $uri');
+      _processedUris.add(uriKey);
+      _handleIncomingUri(uri);
+
+      // 5秒后从已处理集合中移除，允许一定时间内去重但不会永久占用内存
+      Future.delayed(const Duration(seconds: 5), () {
+        _processedUris.remove(uriKey);
+      });
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error in _handleIncomingUriSafely: $e');
+      debugPrint('StackTrace: $stackTrace');
+    }
   }
 
   /// 处理接收到的 URL (处理冷启动或热启动传来的 URL)
@@ -423,7 +456,7 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
               // 这是一个带有参数的 Deep Link 调用（比如从快捷指令传来金额）
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 Future.delayed(const Duration(milliseconds: 300), () {
-                  _handleIncomingUri(uri!);
+                  _handleIncomingUriSafely(uri!.toString());
                 });
               });
               // 返回首页作为底色背景，并在延时后弹窗
@@ -441,7 +474,7 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
             WidgetsBinding.instance.addPostFrameCallback((_) {
               Future.delayed(const Duration(milliseconds: 300), () {
                 if (uri != null) {
-                   _handleIncomingUri(uri!);
+                   _handleIncomingUriSafely(uri!.toString());
                 }
               });
             });

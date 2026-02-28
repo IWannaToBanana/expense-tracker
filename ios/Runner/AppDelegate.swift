@@ -13,25 +13,42 @@ class AppDelegate: FlutterAppDelegate {
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
     let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
-    
-    if let controller = window?.rootViewController as? FlutterViewController {
-      methodChannel = FlutterMethodChannel(name: "com.example.expenseTracker/deeplink",
-                                           binaryMessenger: controller.binaryMessenger)
-      
-      methodChannel?.setMethodCallHandler({ [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
-        if call.method == "getInitialUri" {
-          result(self?.initialDeepLink)
-          self?.initialDeepLink = nil // 取出后清空
-        } else {
-          result(FlutterMethodNotImplemented)
-        }
-      })
+
+    // 延迟初始化 MethodChannel，确保 Flutter 引擎完全就绪
+    DispatchQueue.main.async { [weak self] in
+      self?.setupMethodChannel()
     }
-    
+
     return result
   }
+
+  private func setupMethodChannel() {
+    guard let controller = window?.rootViewController as? FlutterViewController else {
+      print("⚠️ AppDelegate: FlutterViewController not ready, will retry...")
+      // 如果 FlutterViewController 还没准备好，稍后重试
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+        self?.setupMethodChannel()
+      }
+      return
+    }
+
+    methodChannel = FlutterMethodChannel(name: "com.example.expenseTracker/deeplink",
+                                         binaryMessenger: controller.binaryMessenger)
+
+    methodChannel?.setMethodCallHandler({ [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
+      if call.method == "getInitialUri" {
+        print("✅ Native: getInitialUri called, returning: \(self?.initialDeepLink ?? "nil")")
+        result(self?.initialDeepLink)
+        self?.initialDeepLink = nil // 取出后清空
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    })
+
+    print("✅ AppDelegate: MethodChannel initialized successfully")
+  }
   
-  // 重写该方法以手动接管自定义 URL scheme 的唤醒 (Deep Link) 
+  // 重写该方法以手动接管自定义 URL scheme 的唤醒 (Deep Link)
   // 放弃不稳定的 uni_links, 自己建桥直连 Flutter
   override func application(
     _ app: UIApplication,
@@ -39,14 +56,23 @@ class AppDelegate: FlutterAppDelegate {
     options: [UIApplication.OpenURLOptionsKey : Any] = [:]
   ) -> Bool {
     let urlString = url.absoluteString
-    if methodChannel == nil {
-      // Flutter引擎还未初始化完毕（冷启动期间），先存起来
-      initialDeepLink = urlString
-    } else {
-      // 已经在后台运行了（热启动），直接发去 Flutter
-      methodChannel?.invokeMethod("onDeepLink", arguments: urlString)
+    print("📱 Deep Link received: \(urlString)")
+
+    // 确保在主线程执行 MethodChannel 相关操作
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+
+      if self.methodChannel == nil {
+        // Flutter引擎还未初始化完毕（冷启动期间），先存起来
+        print("📦 Storing deep link for later (engine not ready)")
+        self.initialDeepLink = urlString
+      } else {
+        // 已经在后台运行了（热启动），直接发去 Flutter
+        print("🚀 Sending deep link to Flutter immediately")
+        self.methodChannel?.invokeMethod("onDeepLink", arguments: urlString)
+      }
     }
-    
+
     return super.application(app, open: url, options: options)
   }
 }
