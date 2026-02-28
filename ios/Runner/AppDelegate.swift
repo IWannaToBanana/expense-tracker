@@ -16,8 +16,7 @@ class AppDelegate: FlutterAppDelegate {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey : Any] = [:]
   ) -> Bool {
-    print("📱 URL received: \(url.absoluteString)")
-    // 暂时不做任何处理，只接收 URL
+    print("[DeepLink] URL received: \(url.absoluteString)")
     return true
   }
 }
