@@ -58,6 +58,7 @@ class ExpenseTrackerApp extends ConsumerStatefulWidget {
 
 class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with WidgetsBindingObserver {
   StreamSubscription? _sub;
+  static const platform = MethodChannel('com.example.expenseTracker/deeplink');
 
   // 防止重复处理同一个 URI
   final Set<String> _processedUris = {};
@@ -69,8 +70,18 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
     // iOS 平台初始化快捷指令
     _initializeShortcutsIfNeeded();
 
-    // 暂时禁用所有 Deep Link 监听
-    // _initDeepLinkListener();
+    // 启用 Deep Link 监听
+    _initDeepLinkListener();
+
+    // 监听 iOS 原生发来的 Deep Link
+    platform.setMethodCallHandler((call) async {
+      if (call.method == 'onDeepLink') {
+        final urlString = call.arguments as String?;
+        if (urlString != null) {
+          _handleIncomingUriSafely(urlString);
+        }
+      }
+    });
   }
 
   @override
@@ -96,18 +107,16 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
   }
 
   void _initDeepLinkListener() {
-    // 暂时禁用所有 Deep Link 监听功能
-    /*
-    // 处理冷启动时的初始链接 - 读取使用 uni_links 获取的数据
-    getInitialUri().then((uri) {
-      if (uri != null) {
-        _handleIncomingUriSafely(uri.toString());
+    // 读取自己搭建的 MethodChannel 兜底缓存的冷启动数据 (主要针对 iOS 强杀启动)
+    platform.invokeMethod<String>('getInitialUri').then((urlString) {
+      if (urlString != null && urlString.isNotEmpty) {
+        _handleIncomingUriSafely(urlString);
       }
     }).catchError((err) {
-      debugPrint('Failed to get initial uri: $err');
+      debugPrint('Failed to get native initial uri: $err');
     });
 
-    // 监听应用在后台时的链接
+    // 监听应用在后台时的链接 (uni_links)
     _sub = uriLinkStream.listen((Uri? uri) {
       if (uri != null) {
         _handleIncomingUriSafely(uri.toString());
@@ -115,7 +124,6 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
     }, onError: (err) {
       debugPrint('Deep Link Error: $err');
     });
-    */
   }
 
   /// 安全地处理接收到的 URL（带去重和错误处理）
@@ -150,44 +158,23 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
 
   /// 处理接收到的 URL (处理冷启动或热启动传来的 URL)
   void _handleIncomingUri(Uri uri) {
-    debugPrint('🔵 _handleIncomingUri START: $uri');
-
     // 1. 如果有 amount 参数，无论路径如何，都直接静默记账
     final amountStr = uri.queryParameters['amount'];
-    debugPrint('🔵 amountStr: $amountStr');
-
     if (amountStr != null) {
       final amount = double.tryParse(amountStr);
-      debugPrint('🔵 parsed amount: $amount');
-
       if (amount != null && amount > 0) {
-        debugPrint('🔵 Processing amount > 0, getting default category...');
-        _showDebugDialog('Debug', '正在处理金额: ¥$amount');
         // 全自动静默记账，默认存入餐饮
-        try {
-          final defaultCategory = Category.expenseCategories.first;
-          debugPrint('🔵 Got default category: ${defaultCategory.name}, calling _saveQuickTransaction...');
-          _saveQuickTransaction(amount, defaultCategory);
-          debugPrint('🔵 _saveQuickTransaction called');
-        } catch (e, stackTrace) {
-          final error = '❌ Error in _handleIncomingUri: $e';
-          debugPrint(error);
-          debugPrint('StackTrace: $stackTrace');
-          _showDebugDialog('Handle URI Error', '$error\n\n$stackTrace');
-        }
+        final defaultCategory = Category.expenseCategories.first;
+        _saveQuickTransaction(amount, defaultCategory);
         return;
       }
     }
-
-    debugPrint('🔵 No amount parameter, checking other paths...');
 
     // 2. 只有带图片的情况走原先的路径处理逻辑
     String path = uri.path;
     if (path.isEmpty && uri.host.isNotEmpty) {
       path = '/${uri.host}';
     }
-
-    debugPrint('🔵 path: $path');
 
     if (path == '/add_transaction' || path == '/add' || path == '/ocr') {
       if (uri.queryParameters.isNotEmpty) {
@@ -199,8 +186,6 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
          _autoRecognizeLatestScreenshot();
       }
     }
-
-    debugPrint('🔵 _handleIncomingUri END');
   }
 
   /// 自动识别最新截图并显示确认弹窗
@@ -356,15 +341,8 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
 
   /// 快速保存交易
   Future<void> _saveQuickTransaction(double amount, Category category) async {
-    debugPrint('🟢 _saveQuickTransaction START: amount=$amount, category=${category.name}');
-
     try {
-      debugPrint('🟢 Getting storageService...');
-      _showDebugDialog('Debug', '步骤 1/5: 正在获取存储服务...');
       final storageService = ref.read(storageServiceProvider);
-      debugPrint('🟢 Got storageService, creating transaction...');
-
-      _showDebugDialog('Debug', '步骤 2/5: 正在创建交易记录...');
       final transaction = Transaction.create(
         amount: amount,
         categoryId: category.id,
@@ -375,35 +353,17 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
         type: TransactionType.expense,
       );
 
-      debugPrint('🟢 Transaction created, calling addTransaction...');
-      _showDebugDialog('Debug', '步骤 3/5: 正在保存到数据库...\n金额: ¥$amount');
       await storageService.addTransaction(transaction);
-      debugPrint('🟢 Transaction added successfully');
 
       if (mounted) {
-        debugPrint('🟢 Widget mounted, updating state...');
-        _showDebugDialog('Debug', '步骤 4/5: 正在更新界面...');
         ref.read(dataChangeNotifierProvider.notifier).state++;
-        debugPrint('🟢 State updated, showing snackbar...');
         _showSnackBar('已记账 ¥${amount.toStringAsFixed(2)}');
-        debugPrint('🟢 Snackbar shown');
-
-        // 关闭调试对话框
-        final context = navigatorKey.currentContext;
-        if (context != null && Navigator.canPop(context)) {
-          Navigator.of(context).pop();
-        }
-      } else {
-        debugPrint('⚠️ Widget not mounted, skipping UI updates');
       }
-    } catch (e, stackTrace) {
-      final error = '❌ _saveQuickTransaction error: $e';
-      debugPrint(error);
-      debugPrint('StackTrace: $stackTrace');
-      _showDebugDialog('记账失败', '$error\n\n$stackTrace');
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('记账失败: $e', isError: true);
+      }
     }
-
-    debugPrint('🟢 _saveQuickTransaction END');
   }
 
   void _initializeShortcutsIfNeeded() {
@@ -440,34 +400,6 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
         SnackBar(
           content: Text(message),
           backgroundColor: isError ? Colors.red : Colors.green,
-        ),
-      );
-    }
-  }
-
-  /// 显示调试对话框 - 用于追踪崩溃
-  void _showDebugDialog(String title, String content) {
-    final context = navigatorKey.currentContext;
-    if (context != null) {
-      // 避免重复显示对话框
-      if (Navigator.canPop(context)) {
-        return; // 已经有对话框打开了，不再显示
-      }
-
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          title: Text(title, style: const TextStyle(fontSize: 16)),
-          content: SingleChildScrollView(
-            child: Text(content, style: const TextStyle(fontSize: 12)),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('确定'),
-            ),
-          ],
         ),
       );
     }
