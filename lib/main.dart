@@ -80,14 +80,23 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
           final urlString = call.arguments as String?;
           if (urlString != null) {
             debugPrint('🔗 Native Channel: Received $urlString');
+            _showDebugDialog('Native Channel', 'Received: $urlString');
             _handleIncomingUriSafely(urlString);
           }
         }
       } catch (e, stackTrace) {
-        debugPrint('❌ MethodChannel handler error: $e');
-        debugPrint('StackTrace: $stackTrace');
+        final errorMsg = '❌ MethodChannel handler error: $e\n\nStackTrace: $stackTrace';
+        debugPrint(errorMsg);
+        _showDebugDialog('MethodChannel Error', errorMsg);
       }
     });
+
+    // 捕获 Flutter 框架错误
+    FlutterError.onError = (details) {
+      final errorMsg = 'Flutter Error:\n${details.exception}\n\n${details.stack}';
+      debugPrint(errorMsg);
+      _showDebugDialog('Flutter Error', errorMsg);
+    };
   }
 
   @override
@@ -185,6 +194,7 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
 
       if (amount != null && amount > 0) {
         debugPrint('🔵 Processing amount > 0, getting default category...');
+        _showDebugDialog('Debug', '正在处理金额: ¥$amount');
         // 全自动静默记账，默认存入餐饮
         try {
           final defaultCategory = Category.expenseCategories.first;
@@ -192,8 +202,10 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
           _saveQuickTransaction(amount, defaultCategory);
           debugPrint('🔵 _saveQuickTransaction called');
         } catch (e, stackTrace) {
-          debugPrint('❌ Error in _handleIncomingUri: $e');
+          final error = '❌ Error in _handleIncomingUri: $e';
+          debugPrint(error);
           debugPrint('StackTrace: $stackTrace');
+          _showDebugDialog('Handle URI Error', '$error\n\n$stackTrace');
         }
         return;
       }
@@ -380,9 +392,11 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
 
     try {
       debugPrint('🟢 Getting storageService...');
+      _showDebugDialog('Debug', '步骤 1/5: 正在获取存储服务...');
       final storageService = ref.read(storageServiceProvider);
       debugPrint('🟢 Got storageService, creating transaction...');
 
+      _showDebugDialog('Debug', '步骤 2/5: 正在创建交易记录...');
       final transaction = Transaction.create(
         amount: amount,
         categoryId: category.id,
@@ -394,24 +408,31 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
       );
 
       debugPrint('🟢 Transaction created, calling addTransaction...');
+      _showDebugDialog('Debug', '步骤 3/5: 正在保存到数据库...\n金额: ¥$amount');
       await storageService.addTransaction(transaction);
       debugPrint('🟢 Transaction added successfully');
 
       if (mounted) {
         debugPrint('🟢 Widget mounted, updating state...');
+        _showDebugDialog('Debug', '步骤 4/5: 正在更新界面...');
         ref.read(dataChangeNotifierProvider.notifier).state++;
         debugPrint('🟢 State updated, showing snackbar...');
         _showSnackBar('已记账 ¥${amount.toStringAsFixed(2)}');
         debugPrint('🟢 Snackbar shown');
+
+        // 关闭调试对话框
+        final context = navigatorKey.currentContext;
+        if (context != null && Navigator.canPop(context)) {
+          Navigator.of(context).pop();
+        }
       } else {
         debugPrint('⚠️ Widget not mounted, skipping UI updates');
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ _saveQuickTransaction error: $e');
+      final error = '❌ _saveQuickTransaction error: $e';
+      debugPrint(error);
       debugPrint('StackTrace: $stackTrace');
-      if (mounted) {
-        _showSnackBar('记账失败: $e', isError: true);
-      }
+      _showDebugDialog('记账失败', '$error\n\n$stackTrace');
     }
 
     debugPrint('🟢 _saveQuickTransaction END');
@@ -451,6 +472,34 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
         SnackBar(
           content: Text(message),
           backgroundColor: isError ? Colors.red : Colors.green,
+        ),
+      );
+    }
+  }
+
+  /// 显示调试对话框 - 用于追踪崩溃
+  void _showDebugDialog(String title, String content) {
+    final context = navigatorKey.currentContext;
+    if (context != null) {
+      // 避免重复显示对话框
+      if (Navigator.canPop(context)) {
+        return; // 已经有对话框打开了，不再显示
+      }
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: Text(title, style: const TextStyle(fontSize: 16)),
+          content: SingleChildScrollView(
+            child: Text(content, style: const TextStyle(fontSize: 12)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('确定'),
+            ),
+          ],
         ),
       );
     }
