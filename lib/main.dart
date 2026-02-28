@@ -2,7 +2,7 @@ import 'dart:io' show Platform;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // 引入 MethodChannel
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image_picker/image_picker.dart';
@@ -96,6 +96,8 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
   }
 
   void _initDeepLinkListener() {
+    // 暂时禁用所有 Deep Link 监听功能
+    /*
     // 处理冷启动时的初始链接 - 读取使用 uni_links 获取的数据
     getInitialUri().then((uri) {
       if (uri != null) {
@@ -103,15 +105,6 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
       }
     }).catchError((err) {
       debugPrint('Failed to get initial uri: $err');
-    });
-
-    // 读取自己搭建的 MethodChannel 兜底缓存的冷启动数据 (主要针对 iOS 强杀启动)
-    platform.invokeMethod<String>('getInitialUri').then((urlString) {
-      if (urlString != null && urlString.isNotEmpty) {
-        _handleIncomingUriSafely(urlString);
-      }
-    }).catchError((err) {
-      debugPrint('Failed to get native initial uri: $err');
     });
 
     // 监听应用在后台时的链接
@@ -122,6 +115,7 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
     }, onError: (err) {
       debugPrint('Deep Link Error: $err');
     });
+    */
   }
 
   /// 安全地处理接收到的 URL（带去重和错误处理）
