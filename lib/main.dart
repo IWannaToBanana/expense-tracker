@@ -173,23 +173,41 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
 
   /// 处理接收到的 URL (处理冷启动或热启动传来的 URL)
   void _handleIncomingUri(Uri uri) {
+    debugPrint('🔵 _handleIncomingUri START: $uri');
+
     // 1. 如果有 amount 参数，无论路径如何，都直接静默记账
     final amountStr = uri.queryParameters['amount'];
+    debugPrint('🔵 amountStr: $amountStr');
+
     if (amountStr != null) {
       final amount = double.tryParse(amountStr);
+      debugPrint('🔵 parsed amount: $amount');
+
       if (amount != null && amount > 0) {
+        debugPrint('🔵 Processing amount > 0, getting default category...');
         // 全自动静默记账，默认存入餐饮
-        final defaultCategory = Category.expenseCategories.first;
-        _saveQuickTransaction(amount, defaultCategory);
+        try {
+          final defaultCategory = Category.expenseCategories.first;
+          debugPrint('🔵 Got default category: ${defaultCategory.name}, calling _saveQuickTransaction...');
+          _saveQuickTransaction(amount, defaultCategory);
+          debugPrint('🔵 _saveQuickTransaction called');
+        } catch (e, stackTrace) {
+          debugPrint('❌ Error in _handleIncomingUri: $e');
+          debugPrint('StackTrace: $stackTrace');
+        }
         return;
       }
     }
+
+    debugPrint('🔵 No amount parameter, checking other paths...');
 
     // 2. 只有带图片的情况走原先的路径处理逻辑
     String path = uri.path;
     if (path.isEmpty && uri.host.isNotEmpty) {
       path = '/${uri.host}';
     }
+
+    debugPrint('🔵 path: $path');
 
     if (path == '/add_transaction' || path == '/add' || path == '/ocr') {
       if (uri.queryParameters.isNotEmpty) {
@@ -201,6 +219,8 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
          _autoRecognizeLatestScreenshot();
       }
     }
+
+    debugPrint('🔵 _handleIncomingUri END');
   }
 
   /// 自动识别最新截图并显示确认弹窗
@@ -356,8 +376,13 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
 
   /// 快速保存交易
   Future<void> _saveQuickTransaction(double amount, Category category) async {
+    debugPrint('🟢 _saveQuickTransaction START: amount=$amount, category=${category.name}');
+
     try {
+      debugPrint('🟢 Getting storageService...');
       final storageService = ref.read(storageServiceProvider);
+      debugPrint('🟢 Got storageService, creating transaction...');
+
       final transaction = Transaction.create(
         amount: amount,
         categoryId: category.id,
@@ -368,17 +393,28 @@ class _ExpenseTrackerAppState extends ConsumerState<ExpenseTrackerApp> with Widg
         type: TransactionType.expense,
       );
 
+      debugPrint('🟢 Transaction created, calling addTransaction...');
       await storageService.addTransaction(transaction);
+      debugPrint('🟢 Transaction added successfully');
 
       if (mounted) {
+        debugPrint('🟢 Widget mounted, updating state...');
         ref.read(dataChangeNotifierProvider.notifier).state++;
+        debugPrint('🟢 State updated, showing snackbar...');
         _showSnackBar('已记账 ¥${amount.toStringAsFixed(2)}');
+        debugPrint('🟢 Snackbar shown');
+      } else {
+        debugPrint('⚠️ Widget not mounted, skipping UI updates');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ _saveQuickTransaction error: $e');
+      debugPrint('StackTrace: $stackTrace');
       if (mounted) {
         _showSnackBar('记账失败: $e', isError: true);
       }
     }
+
+    debugPrint('🟢 _saveQuickTransaction END');
   }
 
   void _initializeShortcutsIfNeeded() {
